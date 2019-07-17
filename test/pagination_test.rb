@@ -9,14 +9,12 @@ class PaginationTest < Test::Unit::TestCase
     @next_page_info = "eyJkaXJlY3Rpb24iOiJuZXh0IiwibGFzdF9pZCI6NDQwMDg5NDIzLCJsYXN0X3ZhbHVlIjoiNDQwMDg5NDIzIn0%3D"
     @previous_page_info = "eyJsYXN0X2lkIjoxMDg4MjgzMDksImxhc3RfdmFsdWUiOiIxMDg4MjgzMDkiLCJkaXJlY3Rpb24iOiJuZXh0In0%3D"
 
-    @next_link_header = "<https://this-is-my-test-shop.myshopify.com/admin/api/unstable/orders.json?page_info=#{@next_page_info}>; rel=\"next\""
-    @previous_link_header = "<https://this-is-my-test-shop.myshopify.com/admin/api/unstable/orders.json?page_info=#{@previous_page_info}>; rel=\"previous\""
+    @next_link_header = "<https://this-is-my-test-shop.myshopify.com/admin/api/unstable/orders.json?page_info=#{@next_page_info}>; rel=\"next\">"
+    @previous_link_header = "<https://this-is-my-test-shop.myshopify.com/admin/api/unstable/orders.json?page_info=#{@previous_page_info}>; rel=\"previous\">"
   end
 
-  test "navigates using next and previous link headers" do
-    link_header =
-      "<https://this-is-my-test-shop.myshopify.com/admin/api/unstable/orders.json?page_info=#{@previous_page_info}>; rel=\"previous\",\
-      <https://this-is-my-test-shop.myshopify.com/admin/api/unstable/orders.json?page_info=#{@next_page_info}>; rel=\"next\""
+  test "navigates using next and previous link headers with no original params" do
+    link_header ="#{@previous_link_header}, #{@next_link_header}"
 
     fake 'orders', :method => :get, :status => 200, api_version: @version, :body => load_fixture('orders'), :link => link_header
     orders = ShopifyAPI::Order.all
@@ -28,7 +26,6 @@ class PaginationTest < Test::Unit::TestCase
       status: 200,
       body: load_fixture('orders')
     )
-
     next_page = orders.fetch_next_page
     assert_equal 450789469, next_page.first.id
 
@@ -44,24 +41,26 @@ class PaginationTest < Test::Unit::TestCase
     assert_equal 1122334455, previous_page.first.id
   end
 
-  test "retains previous querystring parameters" do
+  test "uses all passed in querystring parameters" do
+    params = "page_info=#{@next_page_info}&limit=50&fields=#{CGI.escape('id,created_at')}"
+    @next_link_header = "<https://this-is-my-test-shop.myshopify.com/admin/api/unstable/orders.json?#{params}>; rel=\"next\">"
     fake(
       'orders',
       method: :get,
       status: 200,
       api_version: @version,
-      url: "https://this-is-my-test-shop.myshopify.com/admin/api/unstable/orders.json?fields=id%2Cupdated_at",
+      url: "https://this-is-my-test-shop.myshopify.com/admin/api/unstable/orders.json?fields=id%2Cupdated_at&limit=100",
       body: load_fixture('orders'),
       link: @next_link_header
     )
-    orders = ShopifyAPI::Order.where(fields: 'id,updated_at')
+    orders = ShopifyAPI::Order.where(fields: 'id,updated_at', limit: 100)
 
     fake(
       'orders',
       method: :get,
       status: 200,
       api_version: @version,
-      url: "https://this-is-my-test-shop.myshopify.com/admin/api/unstable/orders.json?fields=id%2Cupdated_at&page_info=#{@next_page_info}",
+      url: "https://this-is-my-test-shop.myshopify.com/admin/api/unstable/orders.json?fields=id%2Ccreated_at&limit=50&page_info=#{@next_page_info}",
       body: load_fixture('orders')
     )
     next_page = orders.fetch_next_page
